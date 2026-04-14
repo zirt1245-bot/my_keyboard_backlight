@@ -1,15 +1,16 @@
 mod brightness;
+mod name_color;
+mod rainbow;
+mod utils;
 
-use std::fs;
-// работа с файловой системой
 //use std::process::Command;
 // команды для терминала
-//use std::thread;
-//use std::time::{Duration, Instant, SystemTime};
-// работа со временем
 use clap::Parser;
 // команды терминала
 use brightness::{apply_brightness, parse_brightness, read_color};
+use name_color::{get_color_by_name, get_color_by_russian_name};
+use rainbow::hsv;
+use utils::write_color;
 
 static LED: &str = "/sys/devices/platform/tuxedo_keyboard/leds/rgb:kbd_backlight/multi_intensity";
 
@@ -32,13 +33,22 @@ struct Arge {
     #[arg(short, long)]
     color: Option<String>,
 
+    /// Your color in russian: красный, зеленный, синий и т.д.
+    #[arg(long)]
+    color_r: Option<String>,
+
     /// Brightness: 50%, +10, =-20, or 255
     #[arg(short, long)]
     brightness: Option<String>,
+
+    /// Rainbow
+    #[arg(short, long)]
+    rainbow: bool,
 }
 
 fn main() {
     if !std::path::Path::new(LED).exists() {
+        // проверка на наличие нужного драйвера
         eprintln!("Error: Backlight control file not found. It appears the driver is not loaded");
         return;
     }
@@ -51,6 +61,11 @@ fn main() {
         (rgb[0], rgb[1], rgb[2])
     } else if let Some(color_name) = args.color {
         get_color_by_name(&color_name)
+    } else if let Some(color_r_name) = args.color_r {
+        get_color_by_russian_name(&color_r_name)
+    } else if args.rainbow {
+        hsv(LED);
+        return;
     } else {
         read_color(LED)
     };
@@ -66,35 +81,5 @@ fn main() {
     }
 
     let (r, g, b) = current_color;
-    write_color(&format!("{} {} {}", r, g, b));
-}
-
-fn write_color(color_data: &str) {
-    match fs::write(LED, color_data) {
-        Ok(_) => println!("Color: {}", color_data),
-        Err(e) => eprintln!("Error: {}", e),
-    }
-}
-
-fn get_color_by_name(name: &str) -> (u8, u8, u8) {
-    match name.to_lowercase().as_str() {
-        "red" => (255, 0, 0),
-        "green" => (0, 255, 0),
-        "blue" => (0, 0, 255),
-        "white" => (255, 255, 255),
-        "yellow" => (255, 255, 0),
-        "cyan" => (0, 255, 255),
-        "magenta" => (255, 0, 255),
-        "orange" => (255, 128, 0),
-        "pink" => (255, 0, 127),
-        "turquoise" => (0, 128, 128),
-        "violet" => (127, 0, 255),
-        "lime" => (127, 255, 0),
-        "golden" => (255, 180, 50),
-        "gray" => (100, 100, 100),
-        _ => {
-            eprintln!("Unknown color: {}, using white", name);
-            (255, 255, 255)
-        }
-    }
+    write_color(LED, r, g, b);
 }
