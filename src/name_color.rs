@@ -1,3 +1,5 @@
+use colored::Colorize;
+
 pub fn get_color_by_name(name: &str) -> (u8, u8, u8) {
     match name.to_lowercase().as_str() {
         "red" => (255, 0, 0),
@@ -16,29 +18,22 @@ pub fn get_color_by_name(name: &str) -> (u8, u8, u8) {
         "gray" => (100, 100, 100),
         _ => {
             eprintln!("Unknown color: {}, using white", name);
-            (255, 255, 255)
-        }
-    }
-}
-
-pub fn get_color_by_russian_name(name: &str) -> (u8, u8, u8) {
-    match name.to_lowercase().as_str() {
-        "красный" => (255, 0, 0),
-        "зеленый" => (0, 255, 0),
-        "синий" => (0, 0, 255),
-        "белый" => (255, 255, 255),
-        "желтый" => (255, 255, 0),
-        "голубой" => (0, 255, 255),
-        "пурпурный" => (255, 0, 255),
-        "оранжевый" => (255, 128, 0),
-        "розовый" => (255, 0, 127),
-        "бирюзовый" => (0, 128, 128),
-        "фиолетовый" => (127, 0, 255),
-        "лаймовый" => (127, 255, 0),
-        "золотой" => (255, 180, 50),
-        "серый" => (100, 100, 100),
-        _ => {
-            eprintln!("Неизвестный цвет: {}, используется белый", name);
+            println!(
+                "Colors: {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, gray",
+                "red".red(),
+                "green".green(),
+                "blue".blue(),
+                "white".truecolor(255, 255, 255),
+                "yellow".yellow(),
+                "cyan".cyan(),
+                "magenta".magenta(),
+                "orange".truecolor(255, 128, 0),
+                "pink".truecolor(255, 0, 127),
+                "turquoise".truecolor(0, 128, 128),
+                "violet".truecolor(127, 0, 255),
+                "lime".truecolor(127, 255, 0),
+                "golden".truecolor(255, 180, 50),
+            );
             (255, 255, 255)
         }
     }

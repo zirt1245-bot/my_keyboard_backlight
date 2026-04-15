@@ -8,13 +8,13 @@ mod utils;
 use clap::Parser;
 // команды терминала
 use brightness::{apply_brightness, parse_brightness, read_color};
-use name_color::{get_color_by_name, get_color_by_russian_name};
+use name_color::get_color_by_name;
 use rainbow::hsv;
 use utils::write_color;
 
 static LED: &str = "/sys/devices/platform/tuxedo_keyboard/leds/rgb:kbd_backlight/multi_intensity";
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(
     name = "Backlight",
     version,
@@ -32,10 +32,6 @@ struct Arge {
     /// Your color: red, green, blue, etc
     #[arg(short, long)]
     color: Option<String>,
-
-    /// Your color in russian: красный, зеленный, синий и т.д.
-    #[arg(long)]
-    color_r: Option<String>,
 
     /// Brightness: 50%, +10, =-20, or 255
     #[arg(short, long)]
@@ -61,8 +57,6 @@ fn main() {
         (rgb[0], rgb[1], rgb[2])
     } else if let Some(color_name) = args.color {
         get_color_by_name(&color_name)
-    } else if let Some(color_r_name) = args.color_r {
-        get_color_by_russian_name(&color_r_name)
     } else if args.rainbow {
         hsv(LED);
         return;
