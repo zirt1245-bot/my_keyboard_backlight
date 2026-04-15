@@ -3,16 +3,18 @@ mod name_color;
 mod rainbow;
 mod utils;
 
-//use std::process::Command;
-// команды для терминала
 use clap::Parser;
+use std::fs;
+use std::process::Command;
 // команды терминала
 use brightness::{apply_brightness, parse_brightness, read_color};
 use name_color::get_color_by_name;
 use rainbow::hsv;
-use utils::write_color;
+use utils::{off_on, write_color};
 
 static LED: &str = "/sys/devices/platform/tuxedo_keyboard/leds/rgb:kbd_backlight/multi_intensity";
+static OFF_ON: &str = "/sys/devices/platform/tuxedo_keyboard/leds/rgb:kbd_backlight/brightness";
+const PID_FILE: &str = "/tmp/backlight_rainbow.pid";
 
 #[derive(Parser, Debug)]
 #[command(
@@ -29,6 +31,10 @@ struct Arge {
     #[arg(long)]
     off: bool,
 
+    /// On backlight
+    #[arg(long)]
+    on: bool,
+
     /// Your color: red, green, blue, etc
     #[arg(short, long)]
     color: Option<String>,
@@ -40,6 +46,13 @@ struct Arge {
     /// Rainbow
     #[arg(short, long)]
     rainbow: bool,
+
+    /// Stop background effects
+    #[arg(long)]
+    stop: bool,
+
+    #[arg(long, hide = true)]
+    rainbow_daemon: bool,
 }
 
 fn main() {
@@ -51,9 +64,50 @@ fn main() {
 
     let args = Arge::parse();
 
-    let mut current_color = if args.off {
-        (0, 0, 0)
-    } else if let Some(rgb) = args.rgb {
+    if !args.rainbow_daemon {
+        stop_daemon();
+    }
+
+    if args.stop {
+        println!("Stop process");
+        return;
+    }
+
+    if args.rainbow {
+        let exe = match std::env::current_exe() {
+            Ok(ok) => ok,
+            Err(e) => {
+                eprintln!("Failed to get path to executable file: {}", e);
+                return;
+            }
+        };
+
+        let child = match Command::new(exe).arg("--rainbow-daemon").spawn() {
+            Ok(ok) => ok,
+            Err(e) => {
+                eprintln!("Failed to start background process: {}", e);
+                return;
+            }
+        };
+
+        let _ = fs::write(PID_FILE, child.id().to_string());
+
+        println!("The process has started (PID: {})", child.id());
+        return;
+    }
+
+    if args.rainbow_daemon {
+        hsv(LED);
+        return;
+    }
+
+    if args.off {
+        off_on(OFF_ON, 0);
+    } else if args.on {
+        off_on(OFF_ON, 255);
+    }
+
+    let mut current_color = if let Some(rgb) = args.rgb {
         (rgb[0], rgb[1], rgb[2])
     } else if let Some(color_name) = args.color {
         get_color_by_name(&color_name)
@@ -76,4 +130,14 @@ fn main() {
 
     let (r, g, b) = current_color;
     write_color(LED, r, g, b);
+}
+
+fn stop_daemon() {
+    if let Ok(pid_str) = fs::read_to_string(PID_FILE) {
+        if let Ok(pid) = pid_str.trim().parse::<i32>() {
+            // убиваем процесс через системный kill
+            let _ = Command::new("kill").arg("-9").arg(pid.to_string()).output();
+        }
+        let _ = fs::remove_file(PID_FILE);
+    }
 }
