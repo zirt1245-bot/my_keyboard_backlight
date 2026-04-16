@@ -4,8 +4,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 pub fn write_color(path: &str, r: u8, g: u8, b: u8) {
-    let data = format!("{} {} {}", r, g, b);
-    if let Err(e) = fs::write(path, data) {
+    if let Err(e) = fs::write(path, format!("{} {} {}", r, g, b)) {
         eprintln!("Recording error: {}", e);
     }
 }

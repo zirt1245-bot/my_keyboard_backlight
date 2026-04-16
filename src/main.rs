@@ -1,20 +1,23 @@
 mod brightness;
 mod name_color;
 mod rainbow;
+mod random_colors;
 mod utils;
 
 use clap::Parser;
+use std::env;
 use std::fs;
 use std::process::Command;
 // команды терминала
 use brightness::{apply_brightness, parse_brightness, read_color};
 use name_color::get_color_by_name;
 use rainbow::hsv;
+use random_colors::rand_color;
 use utils::{off_on, write_color};
 
 static LED: &str = "/sys/devices/platform/tuxedo_keyboard/leds/rgb:kbd_backlight/multi_intensity";
 static OFF_ON: &str = "/sys/devices/platform/tuxedo_keyboard/leds/rgb:kbd_backlight/brightness";
-const PID_FILE: &str = "/tmp/backlight_rainbow.pid";
+static PID_FILE: &str = "/tmp/backlight_background.pid";
 
 #[derive(Parser, Debug)]
 #[command(
@@ -47,34 +50,74 @@ struct Arge {
     #[arg(short, long)]
     rainbow: bool,
 
+    /// Random colors: --random 10 (s)
+    #[arg(long)]
+    random: Option<u8>,
+
     /// Stop background effects
     #[arg(long)]
     stop: bool,
 
     #[arg(long, hide = true)]
     rainbow_daemon: bool,
+
+    #[arg(long, hide = true)]
+    random_daemon: bool,
 }
 
 fn main() {
     if !std::path::Path::new(LED).exists() {
-        // проверка на наличие нужного драйвера
         eprintln!("Error: Backlight control file not found. It appears the driver is not loaded");
         return;
     }
 
     let args = Arge::parse();
 
-    if !args.rainbow_daemon {
-        stop_daemon();
-    }
-
-    if args.stop {
-        println!("Stop process");
+    if args.rainbow_daemon {
+        hsv(LED);
         return;
     }
 
+    if args.random_daemon {
+        if let Some(s) = args.random {
+            rand_color(LED, s);
+        }
+        return;
+    }
+
+    if args.off {
+        off_on(OFF_ON, 0);
+    } else if args.on {
+        off_on(OFF_ON, 255);
+    }
+
+    let mut current_color = if let Some(rgb) = args.rgb {
+        (rgb[0], rgb[1], rgb[2])
+    } else if let Some(color_name) = args.color {
+        get_color_by_name(&color_name)
+    } else {
+        read_color(LED)
+    };
+
+    if let Some(b_str) = args.brightness {
+        match parse_brightness(&b_str) {
+            Some(cmd) => {
+                let (r, g, b) = current_color;
+                current_color = apply_brightness(r, g, b, &cmd);
+            }
+            None => eprintln!("Invalid brightness format"),
+        }
+    }
+
+    if !args.rainbow && args.random.is_none() {
+        let (r, g, b) = current_color;
+        write_color(LED, r, g, b);
+    }
+
     if args.rainbow {
-        let exe = match std::env::current_exe() {
+        stop_daemon();
+
+        let exe = match env::current_exe() {
             Ok(ok) => ok,
             Err(e) => {
                 eprintln!("Failed to get path to executable file: {}", e);
@@ -91,45 +134,47 @@ fn main() {
         };
 
         let _ = fs::write(PID_FILE, child.id().to_string());
-
-        println!("The process has started (PID: {})", child.id());
+        println!("Rainbow process started (PID: {})", child.id());
         return;
     }
 
-    if args.rainbow_daemon {
-        hsv(LED);
-        return;
-    }
-
-    if args.off {
-        off_on(OFF_ON, 0);
-    } else if args.on {
-        off_on(OFF_ON, 255);
-    }
-
-    let mut current_color = if let Some(rgb) = args.rgb {
-        (rgb[0], rgb[1], rgb[2])
-    } else if let Some(color_name) = args.color {
-        get_color_by_name(&color_name)
-    } else if args.rainbow {
-        hsv(LED);
-        return;
-    } else {
-        read_color(LED)
-    };
-
-    if let Some(b_str) = args.brightness {
-        match parse_brightness(&b_str) {
-            Some(cmd) => {
-                let (r, g, b) = current_color;
-                current_color = apply_brightness(r, g, b, &cmd);
-            }
-            None => eprintln!("Invalid brightness format"),
+    if let Some(mut s) = args.random {
+        if s < 1 {
+            s = 1;
         }
+
+        stop_daemon();
+
+        let exe = match env::current_exe() {
+            Ok(ok) => ok,
+            Err(e) => {
+                eprintln!("Failed to get path to executable file: {}", e);
+                return;
+            }
+        };
+
+        let child = match Command::new(exe)
+            .arg("--random-daemon")
+            .arg("--random")
+            .arg(s.to_string())
+            .spawn()
+        {
+            Ok(ok) => ok,
+            Err(e) => {
+                eprintln!("Failed to start background process: {}", e);
+                return;
+            }
+        };
+
+        let _ = fs::write(PID_FILE, child.id().to_string());
+        println!("Random colors process started (PID: {})", child.id());
+        return;
     }
 
-    let (r, g, b) = current_color;
-    write_color(LED, r, g, b);
+    if args.stop {
+        stop_daemon();
+        println!("Background process stopped");
+    }
 }
 
 fn stop_daemon() {
